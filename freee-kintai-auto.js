@@ -39,6 +39,10 @@
     // --- 対象スケジュール名 ---
     targetSchedule: '裁量労働（深夜なし）',
 
+    // --- スキップするキーワード（有給・休暇など） ---
+    // スケジュール欄や行内にこれらの文字が含まれる日はスキップ
+    skipKeywords: ['有給', '有休', '休暇', '欠勤', '特別休', '代休', '振替'],
+
     // --- リクエスト間の待機時間（ミリ秒） ---
     delayBetweenRequests: 1500,
 
@@ -105,6 +109,8 @@
 
   const targetDays = [];
 
+  const skippedDays = [];
+
   for (const td of schedCells) {
     if (!td.textContent.includes(CONFIG.targetSchedule)) continue;
 
@@ -113,6 +119,14 @@
 
     const dateCell = row.querySelector('td.htBlock-scrollTable_day');
     const dateText = dateCell ? dateCell.textContent.trim() : '不明';
+
+    // 有給・休暇などのキーワードが行内に含まれていたらスキップ
+    const rowText = row.textContent;
+    const matchedKeyword = CONFIG.skipKeywords.find(kw => rowText.includes(kw));
+    if (matchedKeyword) {
+      skippedDays.push({ dateText, reason: matchedKeyword });
+      continue;
+    }
 
     const actionCell = row.querySelector('td.htBlock-adjastableTableF_actionRow');
     if (!actionCell) continue;
@@ -129,6 +143,14 @@
       form,
       formAction: form.getAttribute('action')
     });
+  }
+
+  // スキップした日を表示
+  if (skippedDays.length > 0) {
+    console.log(`\n⏭️  ${skippedDays.length} 日スキップ（有給・休暇等）:`);
+    for (const s of skippedDays) {
+      console.log(`   ${s.dateText} → 「${s.reason}」を含むためスキップ`);
+    }
   }
 
   if (targetDays.length === 0) {
