@@ -49,7 +49,11 @@
     // --- ドライランモード ---
     // true  = 実際には送信しない（確認のみ）
     // false = 実際に打刻申請を送信する
-    dryRun: true
+    dryRun: true,
+
+    // --- 未来日を除外するか ---
+    // true = 今日より後の日はスキップ（月中実行時の安全策）
+    skipFutureDates: true
   };
 
   // ============================================================
@@ -72,8 +76,8 @@
     return String(hour).padStart(2, '0') + String(minute).padStart(2, '0');
   }
 
-  function formatDisplay(hhmm) {
-    return hhmm.substring(0, 2) + ':' + hhmm.substring(2);
+  function formatTime(hour, minute) {
+    return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
   }
 
   function sleep(ms) {
@@ -119,6 +123,20 @@
 
     const dateCell = row.querySelector('td.htBlock-scrollTable_day');
     const dateText = dateCell ? dateCell.textContent.trim() : '不明';
+
+    // 未来日スキップ
+    if (CONFIG.skipFutureDates) {
+      const match = dateText.match(/(\d{2})\/(\d{2})/);
+      if (match) {
+        const now = new Date();
+        const targetDate = new Date(now.getFullYear(), parseInt(match[1], 10) - 1, parseInt(match[2], 10));
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (targetDate > today) {
+          skippedDays.push({ dateText, reason: '未来日' });
+          continue;
+        }
+      }
+    }
 
     // 有給・休暇などのキーワードが行内に含まれていたらスキップ
     const rowText = row.textContent;
@@ -179,8 +197,8 @@
   console.log('├────────────────┼────────┼────────┤');
   for (const p of plan) {
     const d = p.dateText.padEnd(14);
-    const ci = formatDisplay(p.clockInStr);
-    const co = formatDisplay(p.clockOutStr);
+    const ci = formatTime(p.clockIn.hour, p.clockIn.minute);
+    const co = formatTime(p.clockOut.hour, p.clockOut.minute);
     console.log(`│ ${d} │ ${ci}  │ ${co}  │`);
   }
   console.log('└────────────────┴────────┴────────┘');
@@ -264,11 +282,12 @@
       const resultDoc = new DOMParser().parseFromString(resultHtml, 'text/html');
       const errorMsg = resultDoc.querySelector('.htBlock-alertBox_error, .error-message');
 
-      if (errorMsg && !errorMsg.textContent.includes('エラー勤務')) {
-        console.log(`  ⚠️  ${p.dateText}: 送信完了（警告あり）`);
-        results.push({ date: p.dateText, status: 'warning', clockIn: p.clockInStr, clockOut: p.clockOutStr });
+      if (errorMsg) {
+        const errorText = errorMsg.textContent.trim();
+        console.log(`  ⚠️  ${p.dateText}: 送信完了（警告: ${errorText}）`);
+        results.push({ date: p.dateText, status: 'warning', clockIn: p.clockInStr, clockOut: p.clockOutStr, message: errorText });
       } else {
-        console.log(`  ✅ ${p.dateText}: 出勤 ${formatDisplay(p.clockInStr)} / 退勤 ${formatDisplay(p.clockOutStr)}`);
+        console.log(`  ✅ ${p.dateText}: 出勤 ${formatTime(p.clockIn.hour, p.clockIn.minute)} / 退勤 ${formatTime(p.clockOut.hour, p.clockOut.minute)}`);
         results.push({ date: p.dateText, status: 'success', clockIn: p.clockInStr, clockOut: p.clockOutStr });
       }
 
